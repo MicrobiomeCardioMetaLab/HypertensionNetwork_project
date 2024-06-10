@@ -4,7 +4,7 @@
 #Genus taxonomy in GGMP
 tax <- read.csv("/GGMP/miQTL_genus.csv",row.names = 1,header = T)
 cutoff=0.1
-tax <- data.frame(tax[,which(apply(tax, 2, function(x){length(which(x!= 0))/length(x)}) >= cutoff)])  #188genera*6999samples
+tax <- data.frame(tax[,which(apply(tax, 2, function(x){length(which(x!= 0))/length(x)}) >= cutoff)])
 #Hypertension type in GGMP
 pheno <- read.csv("/GGMP/pheno_data.csv",header = T)
 #merge two data
