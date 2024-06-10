@@ -296,7 +296,6 @@ write.table(check,"pathway_interaction_result.txt",sep="\t",quote = F,row.names 
 
 
 # 08. Independent replication
-setwd(dir="D:/10k/replicate")
 ### data ###
 #gmlp
 genus <- read.csv("gmlp_genus.csv",check.names = F)
