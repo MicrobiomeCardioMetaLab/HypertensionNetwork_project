@@ -1,0 +1,455 @@
+###### Hypertension Network ######
+# 01. Construct Microbial Networks
+### data ###
+#Genus taxonomy in GGMP
+tax <- read.csv("/GGMP/miQTL_genus.csv",row.names = 1,header = T)
+cutoff=0.1
+tax <- data.frame(tax[,which(apply(tax, 2, function(x){length(which(x!= 0))/length(x)}) >= cutoff)])  #188genera*6999samples
+#Hypertension type in GGMP
+pheno <- read.csv("/GGMP/pheno_data.csv",header = T)
+#merge two data
+library(tidyverse)
+tax <- left_join(pheno,tax,by="SampleID")
+write.csv(tax,"tax.csv",row.names = F)
+
+### Construct microbial networks ###
+#Group
+cg0305 <- tax[(tax$Districts == "440305" & tax$Hypertension == "0"),]
+ht0305 <- tax[(tax$Districts == "440305" & tax$Hypertension == "1"),]
+...
+#Transform data
+data <- list(cg0305 ,ht0305 ,...)
+names(data) <- c("cg0305","ht0305",...)
+for(i in 1:length(data)){
+  data[[i]]=data[[i]][,c(-2,-3)]
+  rownames(data[[i]])=data[[i]][,1]
+  data[[i]]=data[[i]][,-1]
+}
+#Run CCLasso
+source("./cclasso.R")
+library(reshape2)
+cor <- list(NULL) #output list
+corName <- sapply(names(data),function(x){paste("cor_", x, sep='')})
+for(i in 1:length(data)){
+  ccl_count =cclasso(x = data[[i]], counts = T, n_boot=100)
+  ccl_cor =ccl_count$cor_w
+  colnames(ccl_cor)=colnames(data[[i]])
+  rownames(ccl_cor)=colnames(data[[i]])
+  ccl_cor[!lower.tri(ccl_cor, diag = F)] =NA 
+  ccl_cor =data.frame(cbind(rownames(ccl_cor),ccl_cor),row.names = NULL,check.names = F)
+  colnames(ccl_cor)[1] ="genus_1" 
+  ccl_cor =melt(ccl_cor,id="genus_1",value.name = corName[i],variable.name = "genus_2")
+  ccl_cor =ccl_cor[!is.na(ccl_cor[,3]),]
+  ccl_cor$name =paste(ccl_cor$genus_1,ccl_cor$genus_2,sep = "--")
+  ccl_cor =ccl_cor[,c(4,1:3)]
+  cor[[i]]=ccl_cor
+}
+#Merge networks from non-hyper and hypertension
+setwd(dir="/GGMP/network")
+htfile <- list.files(pattern="ht")
+ht_cor = map(htfile, read.csv, check.names = F) %>% reduce(left_join, by = c("name","genus_1","genus_2"))
+write.csv(ht_cor,"ht_cor.csv",row.names = F)
+cgfile <- list.files(pattern="cg")
+cg_cor = map(cgfile, read.csv, check.names = F) %>% reduce(left_join, by = c("name","genus_1","genus_2"))
+write.csv(cg_cor,"cg_cor.csv",row.names = F)
+
+
+# 02. Random meta-analysis of networks
+ht_cor=read.csv("ht_cor.csv",check.names=F)
+sample_size <- c(348,342,...)  
+metacor <- data.frame(matrix(nrow=nrow(ht_cor),ncol=6),row.names = rownames(ht_cor),check.names = F)
+colnames(metacor) <- c("hetero_p","I^2","cor_random","TE_random","seTE_random","p_random")
+library(meta)
+ht_cor <- t(ht_cor)
+for (i in 1:ncol(ht_cor)) {
+  cor =ht_cor[,i]
+  n =sample_size
+  meta=metacor(cor,n,sm="ZCOR")
+  metacor$hetero_p[i]=meta$pval.Q
+  metacor$`I^2`[i]=meta$I2
+  forest=as.numeric(forest(meta,digits = 20)$effect.format)
+  metacor$cor_random[i]=forest[2]
+  metacor$TE_random[i]=meta$TE.random
+  metacor$seTE_random[i]=meta$seTE.random
+  metacor$p_random[i]=meta$pval.random
+}
+metacor$fdr_random <- p.adjust(metacor$p_random,method = "BH")
+write.csv(metacor,"ht_metacor.csv",row.names=T)
+#non-hypertensive network is the same as the above.
+
+
+# 03. Heterogeneity between two groups
+ht_metacor <- read.csv("ht_metacor.csv",check.names = F)
+ht_net <- ht_metacor[ht_metacor$fdr_random < 0.05,] #10454
+cg_metacor <- read.csv("cg_metacor.csv",check.names = F)
+cg_net <- cg_metacor[cg_metacor$fdr_random < 0.05,] #11739
+co_abundance <- data.frame(union(ht_net$name,cg_net$name),check.names = F) #12589
+colnames(co_abundance) <- "name"
+ht_coabun <- semi_join(ht_metacor,co_abundance,by="name")
+cg_coabun<- semi_join(cg_metacor,co_abundance,by="name")
+cg_ht <- left_join(cg_coabun,ht_coabun,by="name")
+library(meta)
+for (i in 1:nrow(cg_ht)) {
+  TE =c(cg_ht$TE_cg[i],cg_ht$TE_ht[i])
+  seTE =c(cg_ht$seTE_cg[i],cg_ht$seTE_ht[i])
+  meta=metagen(TE,seTE)
+  cg_ht$hetero_p[i]=meta$pval.Q
+  cg_ht$`I^2`[i]=meta$I2
+}
+
+diff_cor <- cg_ht[cg_ht$hetero_p < 0.05 & cg_ht$`I^2` >0.75,] #581
+write.csv(diff_cor,"diff_cor.csv",row.names = F)
+
+
+# 04. heterogeneity analysis across hypertensive grades
+### data of hypertension grades ###
+pheno <- read.csv("/GGMP/pheno.csv",check.names = F)
+a <- subset(pheno,pheno$DBP >=90 | pheno$SBP >=140) 
+HTN3 <- subset(pheno,pheno$DBP >=110 | pheno$SBP >=180) #Grade 3
+b <- anti_join(a,HTN3,by="SampleID") 
+b$Hypertension[b$DBP<110 & b$DBP>=100] <- "2"
+b$Hypertension[b$SBP<180 & b$SBP>=160] <- "2"
+HTN2 <- subset(b,b$Hypertension == "2") #Grade 2
+HTN1 <- anti_join(b,HTN2,by="SampleID") #Grade 1
+
+tax <- read.csv("tax.csv",check.names = F)
+HTN1 <- semi_join(tax,HTN1,by="SampleID") 
+HTN2 <- semi_join(tax,HTN2,by="SampleID")
+HTN3 <- semi_join(tax,HTN3,by="SampleID")
+
+#Network construction is the same as above.
+
+### heterogeneity analysis ###
+diff_cor <- read.csv("diff_cor.csv",check.names = F)
+htn1 <- read.csv("/ggmp/grades/cor_htn1.csv",check.names = F)
+htn1 <- semi_join(htn1,diff_cor,by="name")
+htn1$TE_htn1 <- 0.5*log((1+htn1$cor_htn1)/(1-htn1$cor_htn1))
+htn1$seTE_htn1 <- 1/sqrt(n1-3)
+#htn2,htn3 are similar
+
+cor0123 <- left_join(diff_cor,htn1,by="name") %>% left_join(.,htn2,by="name") %>% left_join(.,htn3,by="name")
+for (i in 1:nrow(cor0123)) {
+  TE=c(cor0123$TE_cg[i],cor0123$TE_htn1[i],cor0123$TE_htn2[i],cor0123$TE_htn3[i]) 
+  seTE=c(cor0123$seTE_cg[i],cor0123$seTE_htn1[i],cor0123$seTE_htn2[i],cor0123$seTE_htn3[i])
+  meta=metagen(TE,seTE)
+  cor0123$hetero_p[i]=meta$pval.Q
+  cor0123$`I^2`[i]=meta$I2
+} 
+cor0123 <- cor0123[cor0123$hetero_p < 0.05 & cor0123$`I^2` >0.75,]  #82 differential co-abundances
+write.csv(cor0123,"./hetero/cor0123.csv",row.names = F)
+
+
+# 05. Linear regression model between hypertension severity and the strength of co-abundances
+cor0123 <- t(cor0123)
+cor0123 <- data.frame(cbind(rownames(cor0123),cor0123),row.names = NULL,check.names = F)
+cor0123$group <- c(0,1,2,3)
+lm <- data.frame(colnames(cor0123)[1:82],check.names = F)
+data=data.frame(scale(cor0123),check.names = F)
+for (i in 1:82) {
+  a=summary(lm(data[,i]~data$group))
+  lm$beta_0123[i]=a$coefficients[2,1]
+  lm$p_0123[i]=a$coefficients[2,4]
+}
+lm <- lm[lm$p_0123<0.05,])
+write.csv(lm,"lm.csv",row.names = F)
+
+
+# 06. Difference analysis in the abundance level
+### data ###
+#genus and pathway relative abundance after correcting
+tax_correct
+path_correct
+
+### genus ###
+tax_correct <- read.csv("./taxonomy/tax_correct.csv",check.names = F)  #校正后的相对丰度
+#wilcoxon test
+two_group   #hypertension phenotype between two groups
+tax_twogroup <- inner_join(tax_correct,two_group,by="SampleID")
+diff_abun <- data.frame(colnames(tax_twogroup),check.names = F)
+tax_twogroup$Hypertension <- factor(tax_twogroup$Hypertension)
+for(i in 1:nrow(diff_abun)) {
+  genus=tax_twogroup[,i]
+  diff_abun$p_wilcoxon[i]=wilcox.test(genus ~ Hypertension, tax_twogroup)$p.value
+}
+diff_abun$fdr <- p.adjust(diff_abun$p_wilcoxon,method = "BH")
+diff_abun <- diff_abun[diff_abun$fdr < 0.05,]
+write.csv(diff_abun,"/ggmp/genus/diff_abun.csv",row.names = F)
+#Kruskal-Wallis test
+four_group   #hypertension grades phenotype
+tax_fourgroup <- inner_join(tax_correct,four_group,by="SampleID")
+kwtest <- data.frame(colnames(tax_fourgroup),check.names = F)
+tax_fourgroup$Hypertension <- factor(tax_fourgroup$Hypertension)
+for(i in 1:nrow(kwtest)) {
+  genus=tax_fourgroup[,i]
+  kwtest$pvalue[i]=kruskal.test(genus ~ Hypertension, tax_fourgroup)$p.value
+}
+kwtest$fdr <- p.adjust(kwtest$pvalue,method = "BH")
+kwtest <- kwtest[kwtest$fdr < 0.05,]
+write.csv(kwtest,"/ggmp/genus/kwtest.csv",row.names = F)
+#spearman correlation
+name <- kwtest$genus
+mydata <- tax_fourgroup[,c(name,"Hypertension")]
+spearman <- data.frame(colnames(mydata),check.names = F)
+for (i in 1:nrow(spearman)) {
+  spearman$r_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$estimate
+  spearman$p_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$p.value 
+}
+spearman$fdr <- p.adjust(spearman$p_0123,method = "BH")
+write.csv(spearman,"/ggmp/genus/spearman.csv",row.names = F)
+
+### pathway ###
+#wilcoxon test
+path_correct <- read.csv("pathway_correct.csv",check.names = F)
+path_twogroup <- inner_join(path_correct,two_group,by="SampleID")
+diff_abun <- data.frame(colnames(path_twogroup),check.names = F)
+pathway_twogroup$Hypertension <- factor(pathway_twogroup$Hypertension)
+for(i in 1:nrow(diff_abun)) {
+  path=path_twogroup[,i]
+  diff_abun$p_wilcoxon[i]=wilcox.test(path ~ Hypertension, path_twogroup)$p.value
+}
+diff_abun$fdr <- p.adjust(diff_abun$p_wilcoxon,method = "BH")
+diff_abun <- diff_abun[diff_abun$fdr < 0.05,]
+write.csv(diff_abun,"/ggmp/pathway/diff_abun.csv",row.names = F)
+#Kruskal-Wallis test
+diff_path <- diff_abun$path
+diff_path <- path_correct[,c("SampleID",diff_path)]
+path_fourgroup <- inner_join(diff_path,four_group,by="SampleID")
+kwtest <- data.frame(colnames(path_fourgroup),check.names = F)
+path_fourgroup$Hypertension <- factor(path_fourgroup$Hypertension)
+for (i in 1:nrow(kwtest)) {
+  path=as.numeric(path_fourgroup[,i])
+  kwtest$pvalue[i]=kruskal.test(path ~ Hypertension, path_fourgroup)$p.value
+}
+kwtest$fdr <- p.adjust(kwtest$pvalue,method = "BH")
+kwtest <- kwtest[kwtest$fdr<0.05,]
+write.csv(kwtest,"/ggmp/pathway/kwtest.csv",row.names = F)
+path_diff_abun <- kwtest$pathway
+#spearman
+mydata <- path_fourgroup[,c(path_diff_abun,"Hypertension")]
+spearman <- data.frame(colnames(mydata),check.names = F)
+mydata$Hypertension <- as.numeric(mydata$Hypertension)
+for (i in 1:nrow(spearman)) {
+  spearman$r_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$estimate
+  spearman$p_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$p.value
+}
+spearman$fdr <- p.adjust(spearman$p_0123,method = "BH") 
+spearman <- spearman[spearman$fdr<0.05,])
+write.csv(spearman,"/ggmp/pathway/spearman.csv",row.names = F)
+
+
+# 07. Association between co-abundances and pathways
+### data ###
+genus=read.csv("/interaction_data/genus_strength.csv",sep = ",",row.names = 1,check.names = F)  #genus involved in hypertension-severity related co-abundances
+path=read.csv("/interaction_data/pathway_linear.csv",sep = ",",row.names = 1,check.names = F) #pathway showing linear association to severity
+pheno=read.csv("/interaction_data/bp.csv",sep = ",",row.names = 1,check.names = F) #hypertension grades phenotype
+result=read.csv("/interaction_data/lm.csv",sep = ",",row.names = 1,check.names = F) #hypertension-severity related co-abundances
+
+### association analysis ###
+library(broom)
+check=data.frame(genus_1=NA,genus_2=NA,path=NA,
+                 var_ind_0=NA,p_ind_0=NA,var_int_0=NA,
+                 var_ind_1=NA,p_ind_1=NA,var_int_1=NA,
+                 var_ind_2=NA,p_ind_2=NA,var_int_2=NA,
+                 var_ind_3=NA,p_ind_3=NA,var_int_3=NA)
+for (i in 1:nrow(result)) {
+  for (j in 1:ncol(path)) {
+    tmp=data.frame(c(result[i,1:3],colnames(path)[j],
+                     summary(lm(path[,j][which(pheno$Hypertension==0)]~genus[,result$genus_1[i]][which(pheno$Hypertension==0)]+genus[,result$genus_2[i]][which(pheno$Hypertension==0)]))$r.squared,
+                     glance(summary(lm(path[,j][which(pheno$Hypertension==0)]~genus[,result$genus_1[i]][which(pheno$Hypertension==0)]+genus[,result$genus_2[i]][which(pheno$Hypertension==0)])))$p.value,
+                     summary(lm(path[,j][which(pheno$Hypertension==0)]~genus[,result$genus_1[i]][which(pheno$Hypertension==0)]+genus[,result$genus_2[i]][which(pheno$Hypertension==0)]+genus[,result$genus_1[i]][which(pheno$Hypertension==0)]:genus[,result$genus_2[i]][which(pheno$Hypertension==0)]))$r.squared,
+                     
+                     summary(lm(path[,j][which(pheno$Hypertension==1)]~genus[,result$genus_1[i]][which(pheno$Hypertension==1)]+genus[,result$genus_2[i]][which(pheno$Hypertension==1)]))$r.squared,
+                     glance(summary(lm(path[,j][which(pheno$Hypertension==1)]~genus[,result$genus_1[i]][which(pheno$Hypertension==1)]+genus[,result$genus_2[i]][which(pheno$Hypertension==1)])))$p.value,
+                     summary(lm(path[,j][which(pheno$Hypertension==1)]~genus[,result$genus_1[i]][which(pheno$Hypertension==1)]+genus[,result$genus_2[i]][which(pheno$Hypertension==1)]+genus[,result$genus_1[i]][which(pheno$Hypertension==1)]:genus[,result$genus_2[i]][which(pheno$Hypertension==1)]))$r.squared,
+                     
+                     summary(lm(path[,j][which(pheno$Hypertension==2)]~genus[,result$genus_1[i]][which(pheno$Hypertension==2)]+genus[,result$genus_2[i]][which(pheno$Hypertension==2)]))$r.squared,
+                     glance(summary(lm(path[,j][which(pheno$Hypertension==2)]~genus[,result$genus_1[i]][which(pheno$Hypertension==2)]+genus[,result$genus_2[i]][which(pheno$Hypertension==2)])))$p.value,
+                     summary(lm(path[,j][which(pheno$Hypertension==2)]~genus[,result$genus_1[i]][which(pheno$Hypertension==2)]+genus[,result$genus_2[i]][which(pheno$Hypertension==2)]+genus[,result$genus_1[i]][which(pheno$Hypertension==2)]:genus[,result$genus_2[i]][which(pheno$Hypertension==2)]))$r.squared,
+                     
+                     summary(lm(path[,j][which(pheno$Hypertension==3)]~genus[,result$genus_1[i]][which(pheno$Hypertension==3)]+genus[,result$genus_2[i]][which(pheno$Hypertension==3)]))$r.squared,
+                     glance(summary(lm(path[,j][which(pheno$Hypertension==3)]~genus[,result$genus_1[i]][which(pheno$Hypertension==3)]+genus[,result$genus_2[i]][which(pheno$Hypertension==3)])))$p.value,
+                     summary(lm(path[,j][which(pheno$Hypertension==3)]~genus[,result$genus_1[i]][which(pheno$Hypertension==3)]+genus[,result$genus_2[i]][which(pheno$Hypertension==3)]+genus[,result$genus_1[i]][which(pheno$Hypertension==3)]:genus[,result$genus_2[i]][which(pheno$Hypertension==3)]))$r.squared
+    ))
+    colnames(tmp)=colnames(check)
+    check=rbind(check,tmp)
+  }
+}
+check=check[-1,]
+check$q_ind_0=p.adjust(check$p_ind_0,method = "BH")
+check$q_ind_1=p.adjust(check$p_ind_1,method = "BH")
+check$q_ind_2=p.adjust(check$p_ind_2,method = "BH")
+check$q_ind_3=p.adjust(check$p_ind_3,method = "BH")
+check=check[which(check$q_ind_0<0.05&check$q_ind_1<0.05&check$q_ind_2<0.05&check$q_ind_3<0.05),]
+
+check$var_ind_0_delta=check$var_int_0-check$var_ind_0
+check$var_ind_1_delta=check$var_int_1-check$var_ind_1
+check$var_ind_2_delta=check$var_int_2-check$var_ind_2
+check$var_ind_3_delta=check$var_int_3-check$var_ind_3
+
+for(i in 1:nrow(check)){
+  data=data.frame(scale(data.frame(group=c(0,1,2,3),delta=as.numeric(check[i,21:24]))))
+  check$var_delta_r[i]=cor.test(data$delta,data$group,method = "pearson")$estimate
+  check$var_delta_p[i]=cor.test(data$delta,data$group,method = "pearson")$p.value
+}
+check=check[which(check$var_delta_p<0.05),]
+write.table(check,"pathway_interaction_result.txt",sep="\t",quote = F,row.names = F)
+
+
+# 08. Independent replication
+setwd(dir="D:/10k/replicate")
+### data ###
+#gmlp
+genus <- read.csv("gmlp_genus.csv",check.names = F)
+pheno <- read.csv("GMLP_pheno.csv")
+pheno <- pheno[pheno$Hypertension=="yes",]
+ht1 <- semi_join(genus,pheno,by="SampleID")
+#Australian cohort
+genus <- read.csv("australian_genus.csv",check.names = F,row.names = 1)
+pheno <- read.csv("australian_pheno.csv")
+pheno <- pheno[pheno$Hypertension==1,]
+ht2 <- semi_join(genus,pheno,by="SampleID")
+#merge
+ht <- bind_rows(ht1,ht2)
+ht[is.na(ht)] <- 0
+write.csv(ht,"merged_ht.csv",row.names = F)
+#extract 188 genera
+ggmp <- read.csv("ggmp_genus.csv",check.names = F,row.names = 1)
+intersect <- intersect(colnames(ggmp),colnames(ht))
+ht_filter <- ht[,intersect]  
+ht_filter <- data.frame(ht_filter[,which(apply(ht_filter, 2, function(x){length(which(x == 0))}) < 281)], check.names = F)
+
+### construct network ###
+source("../feature_table/cclasso.R")
+ccl_count =cclasso(x = ht_filter, counts = T, n_boot=100) 
+#correlation matrix
+ccl_cor =ccl_count$cor_w
+colnames(ccl_cor)=colnames(ht_filter)
+rownames(ccl_cor)=colnames(ht_filter)
+ccl_cor[!lower.tri(ccl_cor, diag = F)] =NA 
+ccl_cor =data.frame(cbind(rownames(ccl_cor),ccl_cor),row.names = NULL,check.names = F)
+colnames(ccl_cor)[1] ="genus_1" 
+ccl_cor =melt(ccl_cor,id="genus_1",value.name = "cor_gmlp",variable.name = "genus_2")
+ccl_cor =ccl_cor[!is.na(ccl_cor[,3]),]
+#p value matrix
+ccl_p =ccl_count$p_vals
+colnames(ccl_p)=colnames(ht_filter)
+rownames(ccl_p)=colnames(ht_filter)
+ccl_p[!lower.tri(ccl_p, diag = F)] =NA 
+ccl_p =data.frame(cbind(rownames(ccl_p),ccl_p),row.names = NULL,check.names = F)
+colnames(ccl_p)[1] ="genus_1" 
+ccl_p =melt(ccl_p,id="genus_1",value.name = "pvalue",variable.name = "genus_2")
+ccl_p =ccl_p[!is.na(ccl_p[,3]),]
+#merge two matrix
+ccl =left_join(ccl_cor,ccl_p,by=c("genus_1","genus_2"))
+ccl$name =paste(ccl$genus_1,ccl$genus_2,sep = "--")
+ccl =ccl[,c(5,1:4)]
+ccl <- ccl[!is.na(ccl$pvalue),] 
+
+### replication analysis ###
+ht_ggmp <- read.csv("ht_metacor.csv",check.names = F)
+ht_ggmp <- ht_ggmp[ht_ggmp$fdr_random <0.05,]
+ccl_s1 <- data.frame(intersect(ccl$name,ht_ggmp$name),check.names = F)
+colnames(ccl_s1) <- "name"
+ccl_s1 <- semi_join(ccl,ccl_s1,by="name")
+ccl_s1$pvalue <- as.numeric(ccl_s1$pvalue)
+#for hypertension network of ggmp
+ccl_s0 <- left_join(ccl2_s1[,1:4],ht_ggmp,by="name")
+ccl_s0$TE_gmlp <- 0.5*log((1+ccl_s0$cor_gmlp)/(1-ccl_s0$cor_gmlp))
+ccl_s0$seTE_gmlp <- 1/sqrt(n-3)
+for (i in 1:nrow(ccl_s0)) {
+  TE =c(ccl_s0$TE_gmlp[i],ccl_s0$TE_ggmp[i])
+  seTE =c(ccl_s0$seTE_gmlp[i],ccl_s0$seTE_ggmp[i])
+  meta=metagen(TE,seTE)
+  ccl_s0$hetero_p[i]=meta$pval.Q
+}
+nrow(ccl_s0[ccl_s0$hetero_p > 0.05,])
+write.csv(ccl_s0,"rep_s0.csv",row.names = F)
+
+ccl_s1 <- ccl_s1[ccl_s1$pvalue<0.05,]
+ccl_s1$cor_gmlp <- as.numeric(ccl_s1$cor_gmlp)
+ccl_s1$TE_gmlp <- 0.5*log((1+ccl_s1$cor_gmlp)/(1-ccl_s1$cor_gmlp))
+ccl_s1$seTE_gmlp <- 1/sqrt(n-3)
+ccl_s1 <- left_join(ccl_s1[,c(1:4,6,7)],ht_ggmp,by="name")
+for (i in 1:nrow(ccl_s1)) {
+  TE =c(ccl_s1$TE_gmlp[i],ccl_s1$TE_ggmp[i])
+  seTE =c(ccl_s1$seTE_gmlp[i],ccl_s1$seTE_ggmp[i])
+  meta=metagen(TE,seTE)
+  ccl_s1$hetero_p[i]=meta$pval.Q
+}
+nrow(ccl_s1[ccl_s1$hetero_p > 0.05,])
+write.csv(ccl_s1,"rep_s1.csv",row.names = F)
+#for hypertension related co-abundances
+diff_cor <- read.csv("diff_cor.csv",check.names = F) 
+ccl$cor_gmlp <- as.numeric(ccl$cor_gmlp)
+ccl$TE_gmlp <- 0.5*log((1+ccl$cor_gmlp)/(1-ccl$cor_gmlp))
+ccl$seTE_gmlp <- 1/sqrt(n-3)
+ccl_s2 <- inner_join(diff_cor,ccl[,c(1,4,6,7)],by="name")
+for (i in 1:nrow(ccl_s2)) {
+  TE =c(ccl_s2$TE_gmlp[i],ccl_s2$TE_ggmp[i])
+  seTE =c(ccl_s2$seTE_gmlp[i],ccl_s2$seTE_ggmp[i])
+  meta=metagen(TE,seTE)
+  ccl_s2$hetero_p[i]=meta$pval.Q
+}
+write.csv(ccl_s2,"rep_s2.csv",row.names = F)
+
+
+# 09. Bias of comorbidities
+### data ###
+covariate <- read.csv("covariate.csv",check.names = F)
+covariate <- covariate[,c(1,190:198)]
+genus_rela <- read.csv("ggmp_genus_rela.csv",check.names = F)
+covariate <- left_join(genus_rela,covariate,by="SampleID")
+
+diff_cor <- read.csv("diff_cor.csv",check.names = F)
+ht <- diff_cor[,c(1,6:9)]
+library(stringr)
+ht$genus_1 <- str_split_fixed(ht$name,"\\--",2)[,1]
+ht$genus_2 <- str_split_fixed(ht$name,"\\--",2)[,2]
+ht <- ht[,c(14,15,2:13)]
+
+### partial correlation analysis ###
+library(psych)
+library(corpcor)
+colnames(covariate[,c(189:196)])
+variable <- c("age","sex","bmi","hyperlipoidemia","diabetes","antibiotics","smoking","obesity")
+variable_ht <- sapply(variable,function(x){paste("pcor_rm_",x,sep = "")})
+ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
+for (k in 1:8) {
+  colnames(ht)[k+6]=variable_ht[k]
+  for (n in 1:nrow(ht)) {
+    n1=grep(ht$genus_1[n],colnames(covariate))
+    n2=grep(ht$genus_2[n],colnames(covariate))
+    df=covariate[covariate$Hypertension==1,c(n1,n2,(k+188))]
+    a=corr.test(df,use = "complete",adjust = "none")
+    df1=a$r
+    df1[2,1]=ht$cor_ht[n]
+    df1[1,2]=ht$cor_ht[n]
+    ht[,(k+6)][n]=cor2pcor(df1)[2,1]
+  }
+}
+write.csv(ht,"ht_pcor.csv",row.names = F)
+
+### heterogeneity analysis before and after adjusting
+varibale_TE <- sapply(variable,function(x){paste("TE_rm_",x,sep = "")})
+ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
+for (k in 1:8) {
+  colnames(ht)[k+14]=varibale_TE[k]
+  pcor=ht[,(k+6)]
+  ht[,(k+14)]=0.5*log((1+pcor)/(1-pcor))
+}
+
+variable_p <- sapply(variable,function(x){paste("hetero_p_",x,sep = "")})
+library(meta)
+ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
+for (k in 1:8) {
+  colnames(ht)[k+22]=variable_p[k]
+  for (i in 1:nrow(ht)) {
+    TE=c(ht$TE_ht[i],ht[,(k+14)][i]) 
+    seTE=c(ht$seTE_ht[i],ht$seTE_ht[i])
+    meta=metagen(TE,seTE)
+    ht[,(k+22)][i]=meta$pval.Q
+  }
+}
+write.csv(ht,"ht_pcor_hetero.csv",row.names = F)
+
+###### That's all. Thanks for your reading! ######
