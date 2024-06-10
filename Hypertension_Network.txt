@@ -161,7 +161,7 @@ tax_correct
 path_correct
 
 ### genus ###
-tax_correct <- read.csv("./taxonomy/tax_correct.csv",check.names = F)  #校正后的相对丰度
+tax_correct <- read.csv("./taxonomy/tax_correct.csv",check.names = F)
 #wilcoxon test
 two_group   #hypertension phenotype between two groups
 tax_twogroup <- inner_join(tax_correct,two_group,by="SampleID")
@@ -239,10 +239,14 @@ write.csv(spearman,"/ggmp/pathway/spearman.csv",row.names = F)
 
 # 07. Association between co-abundances and pathways
 ### data ###
-genus=read.csv("/interaction_data/genus_strength.csv",sep = ",",row.names = 1,check.names = F)  #genus involved in hypertension-severity related co-abundances
-path=read.csv("/interaction_data/pathway_linear.csv",sep = ",",row.names = 1,check.names = F) #pathway showing linear association to severity
-pheno=read.csv("/interaction_data/bp.csv",sep = ",",row.names = 1,check.names = F) #hypertension grades phenotype
-result=read.csv("/interaction_data/lm.csv",sep = ",",row.names = 1,check.names = F) #hypertension-severity related co-abundances
+genus=read.csv("/interaction_data/genus_strength.csv",sep = ",",row.names = 1,check.names = F)  
+#genus involved in hypertension-severity related co-abundances
+path=read.csv("/interaction_data/pathway_linear.csv",sep = ",",row.names = 1,check.names = F) 
+#pathway showing linear association to severity
+pheno=read.csv("/interaction_data/bp.csv",sep = ",",row.names = 1,check.names = F) 
+#hypertension grades phenotype
+result=read.csv("/interaction_data/lm.csv",sep = ",",row.names = 1,check.names = F) 
+#hypertension-severity related co-abundances
 
 ### association analysis ###
 library(broom)
