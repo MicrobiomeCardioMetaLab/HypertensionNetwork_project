@@ -33,15 +33,12 @@ corName <- sapply(names(data),function(x){paste("cor_", x, sep='')})
 for(i in 1:length(data)){
   ccl_count =cclasso(x = data[[i]], counts = T, n_boot=100)
   ccl_cor =ccl_count$cor_w
-  colnames(ccl_cor)=colnames(data[[i]])
-  rownames(ccl_cor)=colnames(data[[i]])
   ccl_cor[!lower.tri(ccl_cor, diag = F)] =NA 
   ccl_cor =data.frame(cbind(rownames(ccl_cor),ccl_cor),row.names = NULL,check.names = F)
   colnames(ccl_cor)[1] ="genus_1" 
   ccl_cor =melt(ccl_cor,id="genus_1",value.name = corName[i],variable.name = "genus_2")
   ccl_cor =ccl_cor[!is.na(ccl_cor[,3]),]
   ccl_cor$name =paste(ccl_cor$genus_1,ccl_cor$genus_2,sep = "--")
-  ccl_cor =ccl_cor[,c(4,1:3)]
   cor[[i]]=ccl_cor
 }
 #Merge networks from non-hyper and hypertension
@@ -197,44 +194,7 @@ for (i in 1:nrow(spearman)) {
 spearman$fdr <- p.adjust(spearman$p_0123,method = "BH")
 write.csv(spearman,"/ggmp/genus/spearman.csv",row.names = F)
 
-### pathway ###
-#wilcoxon test
-path_correct <- read.csv("pathway_correct.csv",check.names = F)
-path_twogroup <- inner_join(path_correct,two_group,by="SampleID")
-diff_abun <- data.frame(colnames(path_twogroup),check.names = F)
-pathway_twogroup$Hypertension <- factor(pathway_twogroup$Hypertension)
-for(i in 1:nrow(diff_abun)) {
-  path=path_twogroup[,i]
-  diff_abun$p_wilcoxon[i]=wilcox.test(path ~ Hypertension, path_twogroup)$p.value
-}
-diff_abun$fdr <- p.adjust(diff_abun$p_wilcoxon,method = "BH")
-diff_abun <- diff_abun[diff_abun$fdr < 0.05,]
-write.csv(diff_abun,"/ggmp/pathway/diff_abun.csv",row.names = F)
-#Kruskal-Wallis test
-diff_path <- diff_abun$path
-diff_path <- path_correct[,c("SampleID",diff_path)]
-path_fourgroup <- inner_join(diff_path,four_group,by="SampleID")
-kwtest <- data.frame(colnames(path_fourgroup),check.names = F)
-path_fourgroup$Hypertension <- factor(path_fourgroup$Hypertension)
-for (i in 1:nrow(kwtest)) {
-  path=as.numeric(path_fourgroup[,i])
-  kwtest$pvalue[i]=kruskal.test(path ~ Hypertension, path_fourgroup)$p.value
-}
-kwtest$fdr <- p.adjust(kwtest$pvalue,method = "BH")
-kwtest <- kwtest[kwtest$fdr<0.05,]
-write.csv(kwtest,"/ggmp/pathway/kwtest.csv",row.names = F)
-path_diff_abun <- kwtest$pathway
-#spearman
-mydata <- path_fourgroup[,c(path_diff_abun,"Hypertension")]
-spearman <- data.frame(colnames(mydata),check.names = F)
-mydata$Hypertension <- as.numeric(mydata$Hypertension)
-for (i in 1:nrow(spearman)) {
-  spearman$r_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$estimate
-  spearman$p_0123[i]=cor.test(mydata$Hypertension,mydata[,i],method = "spearman")$p.value
-}
-spearman$fdr <- p.adjust(spearman$p_0123,method = "BH") 
-spearman <- spearman[spearman$fdr<0.05,])
-write.csv(spearman,"/ggmp/pathway/spearman.csv",row.names = F)
+### pathway is the same as the above###
 
 
 # 07. Association between co-abundances and pathways
@@ -326,27 +286,11 @@ source("../feature_table/cclasso.R")
 ccl_count =cclasso(x = ht_filter, counts = T, n_boot=100) 
 #correlation matrix
 ccl_cor =ccl_count$cor_w
-colnames(ccl_cor)=colnames(ht_filter)
-rownames(ccl_cor)=colnames(ht_filter)
-ccl_cor[!lower.tri(ccl_cor, diag = F)] =NA 
-ccl_cor =data.frame(cbind(rownames(ccl_cor),ccl_cor),row.names = NULL,check.names = F)
-colnames(ccl_cor)[1] ="genus_1" 
-ccl_cor =melt(ccl_cor,id="genus_1",value.name = "cor_gmlp",variable.name = "genus_2")
-ccl_cor =ccl_cor[!is.na(ccl_cor[,3]),]
 #p value matrix
 ccl_p =ccl_count$p_vals
-colnames(ccl_p)=colnames(ht_filter)
-rownames(ccl_p)=colnames(ht_filter)
-ccl_p[!lower.tri(ccl_p, diag = F)] =NA 
-ccl_p =data.frame(cbind(rownames(ccl_p),ccl_p),row.names = NULL,check.names = F)
-colnames(ccl_p)[1] ="genus_1" 
-ccl_p =melt(ccl_p,id="genus_1",value.name = "pvalue",variable.name = "genus_2")
-ccl_p =ccl_p[!is.na(ccl_p[,3]),]
 #merge two matrix
 ccl =left_join(ccl_cor,ccl_p,by=c("genus_1","genus_2"))
 ccl$name =paste(ccl$genus_1,ccl$genus_2,sep = "--")
-ccl =ccl[,c(5,1:4)]
-ccl <- ccl[!is.na(ccl$pvalue),] 
 
 ### replication analysis ###
 ht_ggmp <- read.csv("ht_metacor.csv",check.names = F)
@@ -354,7 +298,6 @@ ht_ggmp <- ht_ggmp[ht_ggmp$fdr_random <0.05,]
 ccl_s1 <- data.frame(intersect(ccl$name,ht_ggmp$name),check.names = F)
 colnames(ccl_s1) <- "name"
 ccl_s1 <- semi_join(ccl,ccl_s1,by="name")
-ccl_s1$pvalue <- as.numeric(ccl_s1$pvalue)
 #for hypertension network of ggmp
 ccl_s0 <- left_join(ccl2_s1[,1:4],ht_ggmp,by="name")
 ccl_s0$TE_gmlp <- 0.5*log((1+ccl_s0$cor_gmlp)/(1-ccl_s0$cor_gmlp))
@@ -365,11 +308,9 @@ for (i in 1:nrow(ccl_s0)) {
   meta=metagen(TE,seTE)
   ccl_s0$hetero_p[i]=meta$pval.Q
 }
-nrow(ccl_s0[ccl_s0$hetero_p > 0.05,])
 write.csv(ccl_s0,"rep_s0.csv",row.names = F)
 
 ccl_s1 <- ccl_s1[ccl_s1$pvalue<0.05,]
-ccl_s1$cor_gmlp <- as.numeric(ccl_s1$cor_gmlp)
 ccl_s1$TE_gmlp <- 0.5*log((1+ccl_s1$cor_gmlp)/(1-ccl_s1$cor_gmlp))
 ccl_s1$seTE_gmlp <- 1/sqrt(n-3)
 ccl_s1 <- left_join(ccl_s1[,c(1:4,6,7)],ht_ggmp,by="name")
@@ -379,11 +320,9 @@ for (i in 1:nrow(ccl_s1)) {
   meta=metagen(TE,seTE)
   ccl_s1$hetero_p[i]=meta$pval.Q
 }
-nrow(ccl_s1[ccl_s1$hetero_p > 0.05,])
 write.csv(ccl_s1,"rep_s1.csv",row.names = F)
 #for hypertension related co-abundances
 diff_cor <- read.csv("diff_cor.csv",check.names = F) 
-ccl$cor_gmlp <- as.numeric(ccl$cor_gmlp)
 ccl$TE_gmlp <- 0.5*log((1+ccl$cor_gmlp)/(1-ccl$cor_gmlp))
 ccl$seTE_gmlp <- 1/sqrt(n-3)
 ccl_s2 <- inner_join(diff_cor,ccl[,c(1,4,6,7)],by="name")
