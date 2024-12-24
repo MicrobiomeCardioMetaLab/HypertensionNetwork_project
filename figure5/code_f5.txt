@@ -1,0 +1,98 @@
+######Figure5
+###Figure5B.network
+dc <- read.csv("diff_cor_fourgroup.csv",check.names = F)
+node <- read.csv("node_fourgroup.csv",check.names = F)
+node <- node[node$Degree>=4,]
+dc <- dc[dc$genus_1%in%node$node_name | dc$genus_2%in%node$node_name,]
+genus <- unique(c(as.character(dc$genus_1),as.character(dc$genus_2)))
+library(igraph)
+library(edgebundleR)
+net <- graph_from_data_frame(d=dc1, vertices=genus, directed=T) 
+eb=edgebundle(net,tension =0.9,fontsize = 7,nodesize = rep(3,length(genus)),padding=100)
+eb$x$edges <- jsonlite::toJSON(get.data.frame(net,what="edges"))
+eb <- htmlwidgets::onRender(
+  eb,
+  '
+  function(el,x){
+  // loop through each of our edges supplied
+  //  and change the color
+  x.edges.map(function(edge){
+  var source = edge.from.split(".")[1];
+  var target = edge.to.split(".")[1];
+  d3.select(el).select(".link.source-" + source + ".target-" + target)
+  .style("stroke",edge.color);
+  })
+  }
+  '
+)
+saveEdgebundle(eb, "5B.html", selfcontained = TRUE)
+
+
+###Figure5C.sankey
+library(foreign)
+library(ggplot2)
+library(ggalluvial)
+library(networkD3)
+library(RColorBrewer)
+library(knitr)
+colnames(data) <- c("Genus 1","Genus 2","Correlation")
+corLodes=to_lodes_form(data, axes = 1:ncol(data), id = "Cohort")
+col = c(colorRampPalette(c("#F2F2F0","#F2F2F0","#FAD5DF","#F2F2F0","#FCEFC6","#F2F2F0","#C6E6F5"))(29),"#F4A29A","#ACBBE1")
+ggplot(corLodes, aes(x = x, stratum = stratum, alluvium = Cohort,fill = stratum, label = stratum)) +
+  scale_x_discrete(expand = c(0, 0)) + 
+  geom_flow(width = 0.3,
+            stat = "flow",
+            aes.flow = "backward", 
+            curve_type = "quintic",
+            alpha = 0.75,
+            color = 'white',
+            linewidth = 0.1,
+            show.legend = TRUE) + 
+  geom_stratum(alpha = .95,width = 0.5, 
+               linetype=1,size=0.4,fill="grey99", # 
+               color = "gray70",inherit.aes=TRUE) + 
+  scale_fill_manual(values = col) +
+  geom_text(stat = "stratum", size = 2,color="black") +
+  xlab("") + ylab("") + theme_bw() + 
+  theme(axis.line = element_blank(),axis.ticks = element_blank(),axis.text.y = element_blank()) + 
+  theme(panel.grid =element_blank()) + 
+  theme(panel.border = element_blank()) + 
+  ggtitle("") + guides(fill = "none") ;t
+
+
+
+###Figure5D&6C.linear model
+library(ggplot2)
+library(gridExtra)
+ggplot(data,aes(x=group, y=coefficient,color="#F4A29A")) + 
+  geom_errorbar(aes(ymin=coefficient-se,ymax=coefficient+se),color="gray70",width=0,size=0.6) +
+  geom_point(size=1.5,fill="#F4A29A",shape=21) +
+  geom_smooth(method = "lm",size=0.8,linetype=2,se=F) +
+  geom_ribbon(aes(ymin=coefficient-se,ymax=coefficient+se,fill="#F4A29A"),alpha=0.1, color = NA) +
+  theme_bw() +
+  theme(panel.grid = element_blank())+
+  theme(legend.position = "none") +
+  labs(x = "Grades of hypertension", y = "co-abun", title = "") 
+
+
+
+###Figure5E&6D.boxplot of abundance
+data <- read.csv("abundance.csv",check.names = F)
+bp <- read.csv("bp.csv",check.names = F)  
+library(tidyverse)
+library(reshape2)
+data <- left_join(data,bp,by="SampleID")
+data$Hypertension <- factor(data$Hypertension)
+data <- melt(data,id=c("SampleID","Hypertension"),variable.name = "genus/pathway",value.name = "standard_abundance")
+library(ggplot2)
+library(ggbeeswarm)
+ggplot(data, aes(x=Hypertension,y=standard_abundance)) +
+  stat_boxplot(geom = "errorbar",width=0.5,size=0.1,color="gray70")+
+  geom_point(aes(fill=Hypertension),position = 'jitter', color="#F2F2F0",shape = 21,size=0.8,stroke=0.1,show.legend = FALSE) + 
+  geom_boxplot(notch=F, width=0.8, size=0.1, fill="white",outlier.shape = NA, position=position_dodge(0.7),color="gray70",alpha=0.1) +
+  theme_bw() +
+  theme_classic() +
+  theme(panel.grid = element_blank()) +
+  scale_fill_manual(values = c("#C6E6F5","#FCEFC6","#F7C2CD","#F4A29A")) +
+  labs(x = 'Group', y = 'genus/pathway',title = '') +
+  theme(legend.position = "none")
