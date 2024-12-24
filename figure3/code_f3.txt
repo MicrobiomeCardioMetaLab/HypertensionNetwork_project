@@ -1,0 +1,36 @@
+######Figure3
+###Figure3A.venn
+cor <- list(Non_hypertensive=cor_cg$name,Hypertensive=cor_ht$name)
+library(eulerr) 
+plot(euler(cor),fills = list(fill=c("gray90","gray90"),alpha=0.5),
+     quantities = list(col="black",cex=1),
+     labels = list(col="black",font=3,cex=1),
+     edges = list(col="gray70",size=5))
+
+
+
+###Figure3B.mosaicplot
+diff_cor <- read.csv("diff_cor.csv",check.names = F)
+diff_cor$pattern <- factor(diff_cor$pattern)
+diff_cor$group <- factor(diff_cor$group)
+di <- xtabs( ~pattern+group,diff_cor) 
+library(graphics)
+mosaicplot( ~pattern+group,di, color = c("#ACBBE1","#FAD5DF","#C6E6F5"),main = '',cex.axis = 1,xlab = '', ylab = '')
+
+
+###Figure3C is the same as 2D
+
+
+###Figure3D&3E.scatter
+cor$overlap[cor$hetero_p>0.05]="No_difference"
+cor$overlap[cor$hetero_p<0.05]="With_difference"
+ggplot(cor,aes(x=cor_ggmp,y=cor_rep, color=overlap)) +
+  geom_point(shape=21,size=2,fill="#F2F2F0",stroke=0.7) + 
+  scale_color_manual(values = c("#F4A29A","gray70")) +
+  labs(x = 'Differential co-abundances in GGMP', y = 'Differential co-abundances in replication set',title = '') +
+  geom_hline(yintercept=0,linetype=5,col="gray80") +  
+  geom_vline(xintercept=0,linetype=5,col="gray80") +
+  theme_bw() +
+  theme_classic() +
+  theme(panel.grid = element_blank()) + 
+  theme(legend.position = c(0.85, 0.85))
