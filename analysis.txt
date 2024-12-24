@@ -280,24 +280,23 @@ for (i in 1:nrow(ccl_s2)) {
 write.csv(ccl_s2,"rep_s2.csv",row.names = F)
 
 
-# 09. Bias of comorbidities
+# 09. Partial correlation analysis
 ### data ###
 covariate <- read.csv("covariate.csv",check.names = F) #8 covariates
-genus_rela <- read.csv("ggmp_genus_rela.csv",check.names = F)
+genus_rela <- read.csv("ggmp_genus_rela.csv",check.names = F) #188ggenus
 covariate <- left_join(genus_rela,covariate,by="SampleID")
 
 diff_cor <- read.csv("diff_cor.csv",check.names = F)
 ht <- diff_cor[,c(1,6:9)]
 
-### partial correlation analysis ###
+### partial correlation ###
 library(psych)
 library(corpcor)
-colnames(covariate[,c(189:196)])
 variable <- c("age","sex","bmi","hyperlipoidemia","diabetes","antibiotics","smoking","obesity")
 variable_ht <- sapply(variable,function(x){paste("pcor_rm_",x,sep = "")})
 ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
 for (k in 1:8) {
-  colnames(ht)[k+6]=variable_ht[k]
+  colnames(ht)[k+5]=variable_ht[k]
   for (n in 1:nrow(ht)) {
     n1=grep(ht$genus_1[n],colnames(covariate))
     n2=grep(ht$genus_2[n],colnames(covariate))
@@ -306,31 +305,8 @@ for (k in 1:8) {
     df1=a$r
     df1[2,1]=ht$cor_ht[n]
     df1[1,2]=ht$cor_ht[n]
-    ht[,(k+6)][n]=cor2pcor(df1)[2,1]
+    ht[,(k+5)][n]=cor2pcor(df1)[2,1]
   }
 }
-
-### heterogeneity analysis before and after adjusting
-varibale_TE <- sapply(variable,function(x){paste("TE_rm_",x,sep = "")})
-ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
-for (k in 1:8) {
-  colnames(ht)[k+14]=varibale_TE[k]
-  pcor=ht[,(k+6)]
-  ht[,(k+14)]=0.5*log((1+pcor)/(1-pcor))
-}
-
-variable_p <- sapply(variable,function(x){paste("hetero_p_",x,sep = "")})
-library(meta)
-ht <- cbind(ht,matrix(nrow = 581,ncol = 8))
-for (k in 1:8) {
-  colnames(ht)[k+22]=variable_p[k]
-  for (i in 1:nrow(ht)) {
-    TE=c(ht$TE_ht[i],ht[,(k+14)][i]) 
-    seTE=c(ht$seTE_ht[i],ht$seTE_ht[i])
-    meta=metagen(TE,seTE)
-    ht[,(k+22)][i]=meta$pval.Q
-  }
-}
-write.csv(ht,"ht_pcor_hetero.csv",row.names = F)
 
 ###### That's all. Thanks for your reading! ######
