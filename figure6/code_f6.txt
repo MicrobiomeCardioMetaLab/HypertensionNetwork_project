@@ -1,0 +1,44 @@
+######Figure6
+###Figure6A.bubble plot
+path <- read.csv("pathway_class.csv",check.names = F)
+library(ggplot2)
+library(grid)
+library(tidyverse)
+path <- arrange(path,ratio)
+path$class_name <- factor(path$class_name)
+color <- c("#F4A29A","gray70") 
+ggplot(path,aes(x=ratio,y=reorder(class_name,-ratio))) +
+  labs(x="Ratio",y="") + labs(title="") +
+  geom_point(aes(size=count,color=count)) +
+  scale_color_gradient(low = color[2],high=color[1]) + 
+  scale_size_continuous(range=c(0.3,2)) +  
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(panel.grid = element_blank())
+
+
+###Figure6B.heatmap
+data <- read.csv("pathway_interaction_variance.csv",check.names = F)
+library(reshape2)
+data <- dcast(data,path~name)
+data[is.na(data)] <- "0"
+library(ComplexHeatmap)
+library(circlize)
+col1=colorRampPalette(c("white","#F7C2CD","#F4A29A","darkred"))(n = 10)  
+Heatmap(data,
+        col1,
+        "association", 
+        show_heatmap_legend = F,
+        row_names_side = "left",
+        border = T, 
+        cluster_rows = F,  
+        cluster_columns = T,
+        border_gp = gpar(col = "gray20",lwd = 1), 
+        rect_gp = gpar(col ="white",lwd = 1), 
+        row_names_gp = gpar(fontsize = 3), 
+        column_names_gp = gpar(fontsize = 3)
+)
+
+
+###Figure6C is the same as 5D
+###Figure6D is the same as 5E
