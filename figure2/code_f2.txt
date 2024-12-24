@@ -1,0 +1,89 @@
+######Figure2
+###Figure2A.tSENE
+data <- read.csv("genus_relative.csv",row.names = 1,check.names = F)
+district <- read.csv("district.csv",check.names = F)
+tsne_out <- Rtsne(data, perplexity = 30, theta = 0)
+tsne_data <- data.frame(tsne_out$Y)
+tsne_data$SampleID <- rownames(data)
+tsne_data <- left_join(tsne_data,district,by="SampleID")
+
+library(Rtsne)
+library(ggplot2)
+library(tidyverse)
+library(gridExtra)
+data <- tsne_data
+col1 = colorRampPalette(c( "#F4A29A"  ,"#FAD5DF" ,"#ACBBE1", "#C6E6F5","#FCEFC6", "#F2F2F0"))(14)
+ggplot(tsne_data, aes(tsne1,tsne2,color=group))+
+  geom_point(alpha=1,size =0.05)+xlab(label = "t-SNE 1") + 
+  ylab(label = "t-SNE 2")+theme_bw()+theme(panel.grid=element_blank())+
+  theme(axis.ticks = element_blank())+
+  scale_color_manual(values=col1)+
+  theme(legend.position = "none") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+
+
+
+###Figure2B.chain
+ggplot(size, aes(x=reorder(Districts,-size), y=number)) +
+  geom_point(aes(color=Group), size=1.5, stroke=0.5) +
+  geom_line(aes(group=Districts), linetype=2, color="#F2F2F0") +
+  scale_color_manual(values = c("#ACBBE1","#F4A29A")) +
+  theme_bw() +
+  theme_classic() +
+  labs(x="Districts",y='Sample Size',title='') +
+  theme(legend.position = c(0.85, 0.85))+ 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+
+
+###Figure2C.histogram
+node <- read.csv("ht_node_phylum.csv",check.names = F)
+level <- c("Firmicutes","Proteobacteria","Bacteroidetes","Actinobacteria","Other")
+node$phylum <- factor(node$phylum,levels = level)
+ggplot(node,aes(degree,fill=phylum))+
+  geom_histogram()+
+  theme_bw() +
+  theme(panel.grid = element_blank()) +
+  theme(legend.position = "none") +
+  scale_fill_manual(values = c("#ACBBE1", "#C6E6F5",  "#FCEFC6",  "#FAD5DF" , "#F4A29A")) +
+  labs(x="Number of co-abundances",y="Frequency of genera") +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) 
+
+
+
+###Figure2D&3C.bar plot
+node <- read.csv("ht_node_phylum.csv",check.names = F)
+node <- arrange(node,-degree)
+node <- arrange(node,id)
+level <- c("Firmicutes","Proteobacteria","Bacteroidetes","Actinobacteria","Other")
+node$phylum <- factor(node$phylum,levels = level)
+ggplot(node, aes(y = degree, group=phylum, fill=phylum)) + 
+  geom_bar(aes(x = reorder(node_name,id)), stat="identity",width=0.6)+
+  theme_bw() +
+  theme_classic() +
+  labs(x="Genus",y="Number of co-abundances") +
+  scale_fill_manual(values = c("#ACBBE1", "#C6E6F5",  "#FCEFC6",  "#FAD5DF" , "#F4A29A")) +
+  theme(legend.position = c(0.85, 0.85))+ 
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+
+
+###Figure.2E.donut
+dat <- data.frame(group=c("Positive","Negative"),num=c(n1,n2))
+dat$data="true"
+dat1 <- dat  
+dat1$data="blank"
+dat1$num=0
+dat <- rbind(dat1,dat)
+myLabel = as.vector(dat$group)
+percentage <- scales::percent(dat$num/sum(dat$num))
+ggplot(dat, aes(x = data, y = num, fill = group,position = "fill",width=0.7)) +
+  geom_bar(stat = "identity") +     
+  coord_polar(theta = "y") + 
+  theme_bw() + 
+  labs(x = "", y = "", title = "") + 
+  theme(axis.ticks = element_blank()) + 
+  theme(legend.position = "none") + 
+  theme(axis.text = element_blank()) +
+  theme(panel.grid=element_blank()) +   
+  theme(panel.border=element_blank()) + 
+  scale_fill_manual(values = c("#ACBBE1","#F4A29A"))
