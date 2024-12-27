@@ -1,9 +1,7 @@
 # HypertensionNetwork_project
 
-Co-abundances between non-differential gut microbes associated with hypertension and its severity
+Current status: in press at iMeta
 
-Microbial dysbiosis is associated with hypertension, with research primarily focusing on differences in microbial diversity and individual abundances. However, the ecological interactions among gut microbes remain underexplored. In the absence of methods to experimentally construct a human gut microbiota for studying these interactions, in silico co-abundance analysis offers a valuable approach to uncover the ecological interplay of gut microbes in hypertension. 
+Lu Liu, Qianyi Zhou, Tianbao Xu, Qiufeng Deng, Yuhao Sun, Jingxiang Fu, Muxuan Chen, Xiaojiao Chen, Zhenchao Ma, Quanbin Dong, Beining Ma, Yuwen Jiao, Yan Zhou, Tingting Wu, Huayiyang Zou, Jing Shi, Yifeng Wang, Yanhui Sheng, Liming Tang, Chao Zheng, Wei Wu, Wenjun Ma, Wei Sun, Shixian Hu, Hongwei Zhou, Yan He, Xiangqing Kong & Lianmin Chen. Non-differential gut microbes contribute to hypertension and its severity through co-abundances: a multi-regional prospective cohort study. iMeta, 2025, DOI:10.1002/imt2.268
 
-Using gut microbiome data from 2,355 hypertensive and 4,644 non-hypertensive participants in our GGMP cohort, we identified 581 hypertension-related co-abundances that are robust against comorbidities and exhibit a 68.2% replication rate in other cohorts. Notably, 40.3% of genera without significant differential abundance, yet they contribute to 68.2% of the hypertension-related co-abundances. Additionally, 14.1% of these co-abundances varied across different hypertension grades, with the strength of 21 differential co-abundances significantly associated with hypertension severity. Importantly, the inter-action terms between microbes in these co-abundances contribute extra variance to hypertension-related pathways, such as tryptophan degradation, methionine, and O-antigen biosynthesis pathways.
-
-Our analysis show that gut microbial dysbiosis in hypertension can be assessed not only through changes in microbial abundance but also through alterations in microbial interactions, especially co-abundances. We identified key microbes that play significant roles in regulating the microbial ecosystem in hypertension, offering new insights into the role of the microbiome in hypertension and its severity.
+Published version: 
