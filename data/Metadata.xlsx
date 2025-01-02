@@ -1,4 +1,4 @@
-SampleID	Districts	Age	Sex	BMI	SBP	DBP	Hypertension	Hyperlipidemia	Diabetes	Stroke	Antibiotics	Smk	obesity
+SampleID	Districts	Age	Sex	BMI	SBP	DBP	Hypertension	Hypercholesterolemia	Diabetes	Stroke	Antibiotics	Smk	obesity
 G440104002	G440104	78	m	25.4	135	77	0	0	0	0	n	1	0
 G440104003	G440104	69	m	22	143	70	1	1	0	0	n	1	0
 G440104004	G440104	70	f	23.2	148	78	1	1	1	0	n	0	0
