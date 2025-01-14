@@ -8,7 +8,7 @@ ccl_cor =ccl_count$cor_w
 ccl_cor[!lower.tri(ccl_cor, diag = F)] =NA 
 ccl_cor =data.frame(cbind(rownames(ccl_cor),ccl_cor),row.names = NULL,check.names = F)
 colnames(ccl_cor)[1] ="genus_1" 
-ccl_cor =melt(ccl_cor,id="genus_1",value.name = correlation,variable.name = "genus_2")
+ccl_cor =melt(ccl_cor,id="genus_1",value.name = "correlation",variable.name = "genus_2")
 ccl_cor =ccl_cor[!is.na(ccl_cor[,3]),]
 cor=ccl_cor
 
@@ -55,6 +55,7 @@ p_kwtest=kruskal.test(genus(or path) ~ grades, data)$p.value
 var_ind =summary(lm(path~genus_1+genus_2))$r.squared  #path,genus_1,genus_2 are abundance data
 p_ind =glance(summary(lm(path~genus_1+genus_2)))$p.value
 var_int =summary(lm(path~genus_1+genus_2+genus_1:genus_2))$r.squared
+q_ind =p.adjust(p_ind,method = "BH")
 var_delta =var_int-var_ind  #calculate separately for 4 hypertension grades
 data=data.frame(scale(data.frame(group=c(0,1,2,3),delta=c(var_delta0,var_delta1,var_delta2,var_delta3))))
 var_delta_r=cor.test(data$delta,data$group,method = "pearson")$estimate
