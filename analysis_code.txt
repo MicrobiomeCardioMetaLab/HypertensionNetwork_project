@@ -15,7 +15,7 @@ cor=ccl_cor
 
 ## 02. Random meta-analysis of networks
 library(meta)
-cor  #co-abundance correlations of 14regions
+cor  #co-abundance correlations of 14 regions
 n  #sample sizes
 meta =metacor(cor,n,sm="ZCOR")
 TE =meta$TE.random
@@ -31,7 +31,7 @@ TE =c(TE_cg,TE_ht)   #cg refers to non-hypertension, ht refers to hypertension
 seTE =c(seTE_cg,seTE_ht) 
 meta =metagen(TE,seTE)
 hetero_p =meta$pval.Q
-I^2=meta$I2
+I2=meta$I2
 #across four grades
 TE_htn1 <- 0.5*log((1+cor_htn1)/(1-cor_htn1))  #Fisher's Z transformation, cor_htn1 is the correlation calculated by CCLasso
 seTE_htn1 <- 1/sqrt(n1-3)
@@ -40,7 +40,7 @@ TE=c(TE_cg,TE_htn1,TE_htn2,TE_htn3)
 seTE=c(seTE_cg,seTE_htn1,seTE_htn2,seTE_htn3)
 meta=metagen(TE,seTE)
 hetero_p=meta$pval.Q
-I^2=meta$I2
+I2=meta$I2
 
 
 # 04. Difference analysis in the abundance level
